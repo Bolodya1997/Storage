@@ -23,14 +23,14 @@ public class BestEffortBroadcast extends ComponentDefinition {
     public static class Broadcast implements KompicsEvent {
         private final Serializable data;
 
-        Broadcast(Serializable data) {
+        public Broadcast(Serializable data) {
             this.data = data;
         }
     }
 
     public static class Deliver implements KompicsEvent {
-        final Address source;
-        final Serializable data;
+        public final Address source;
+        public final Serializable data;
 
         private Deliver(Address source, Serializable data) {
             this.source = source;

@@ -7,7 +7,6 @@ import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
 import se.sics.kompics.timer.CancelPeriodicTimeout;
 import se.sics.kompics.timer.SchedulePeriodicTimeout;
-import se.sics.kompics.timer.Timeout;
 import se.sics.kompics.timer.Timer;
 import se.sics.kompics.timer.java.JavaTimer;
 
@@ -19,12 +18,12 @@ public class UniformBroadcast extends ComponentDefinition {
     public static class Init extends se.sics.kompics.Init<UniformBroadcast> {
         private final Address myAddress;
         private final Collection<Address> addresses;    //  FIXME: change to FD correct list
-        private final Component network;
+        private final Component networkComponent;
 
-        public Init(Address myAddress, Collection<Address> addresses, Component network) {
+        public Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {
             this.myAddress = myAddress;
             this.addresses = addresses;
-            this.network = network;
+            this.networkComponent = networkComponent;
         }
     }
 
@@ -53,8 +52,8 @@ public class UniformBroadcast extends ComponentDefinition {
         }
     }
 
-    private static class UpdateTimeout extends Timeout {
-        private UpdateTimeout(SchedulePeriodicTimeout request) {
+    private static class Timeout extends se.sics.kompics.timer.Timeout {
+        private Timeout(SchedulePeriodicTimeout request) {
             super(request);
         }
     }
@@ -67,7 +66,7 @@ public class UniformBroadcast extends ComponentDefinition {
         connector.connect(ub.getNegative(BestEffortBroadcast.Port.class),
                 beb.getPositive(BestEffortBroadcast.Port.class), Channel.TWO_WAY);
         connector.connect(beb.getNegative(Network.class),
-                init.network.getPositive(Network.class), Channel.TWO_WAY);
+                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
 
         final Component timer = creator.create(JavaTimer.class, null);
         connector.connect(ub.getNegative(Timer.class),
@@ -98,9 +97,18 @@ public class UniformBroadcast extends ComponentDefinition {
             final BestEffortBroadcast.Broadcast bebBroadcast =
                     new BestEffortBroadcast.Broadcast(data);
             trigger(bebBroadcast, bebPort);
+        }
+    };
 
-            if (timerId == null)
-                startTimer();
+    private final Handler<Start> startHandler = new Handler<Start>() {
+        @Override
+        public void handle(Start event) {
+            final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, 10);   //  TODO: move to constant
+            final Timeout timeout = new Timeout(schedule);
+            schedule.setTimeoutEvent(timeout);
+
+            trigger(schedule, timerPort);
+            timerId = timeout.getTimeoutId();
         }
     };
 
@@ -121,9 +129,9 @@ public class UniformBroadcast extends ComponentDefinition {
                 }
             };
 
-    private final Handler<UpdateTimeout> timeoutHandler = new Handler<UpdateTimeout>() {
+    private final Handler<Timeout> timeoutHandler = new Handler<Timeout>() {
         @Override
-        public void handle(UpdateTimeout timeout) {
+        public void handle(Timeout timeout) {
             for (Map.Entry<BroadcastData, List<Address>> entry : pending.entrySet()) {
                 final BroadcastData data = entry.getKey();
                 final List<Address> sources = entry.getValue();
@@ -145,18 +153,10 @@ public class UniformBroadcast extends ComponentDefinition {
         myAddress = init.myAddress;
         addresses = init.addresses;
 
+        subscribe(startHandler, control);
         subscribe(broadcastHandler, port);
         subscribe(bebDeliverHandler, bebPort);
         subscribe(timeoutHandler, timerPort);
-    }
-
-    private void startTimer() {
-        final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, 1000);   //  TODO: move to constant
-        final UpdateTimeout timeout = new UpdateTimeout(schedule);
-        schedule.setTimeoutEvent(timeout);
-
-        trigger(schedule, timerPort);
-        timerId = timeout.getTimeoutId();
     }
 
     @Override

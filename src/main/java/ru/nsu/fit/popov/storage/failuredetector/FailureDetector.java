@@ -18,7 +18,7 @@ public class FailureDetector extends ComponentDefinition {
 
     public static class Init extends se.sics.kompics.Init<FailureDetector> {
         private final Address myAddress;
-        private final Collection<Address> addresses;
+        private Collection<Address> addresses;
         private final Component networkComponent;
 
         public Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {
@@ -51,17 +51,18 @@ public class FailureDetector extends ComponentDefinition {
     private final static long DELAY = 1000L;
 
     public static Component create(Creator creator, Connector connector, Init init) {
+        final Collection<Address> bebAddresses = new HashSet<>();
+        bebAddresses.addAll(init.addresses);
+        init.addresses = bebAddresses;
+
         final Component fd = creator.create(FailureDetector.class, init);
 
         final Component timer = creator.create(JavaTimer.class, null);
         connector.connect(fd.getNegative(Timer.class),
                 timer.getPositive(Timer.class), Channel.TWO_WAY);
 
-        final Collection<Address> pureAddresses = new HashSet<>();
-        pureAddresses.addAll(init.addresses);
-
         final Component beb = creator.create(BestEffortBroadcast.class,
-                new BestEffortBroadcast.Init(init.myAddress, pureAddresses));
+                new BestEffortBroadcast.Init(init.myAddress, bebAddresses));
         connector.connect(fd.getNegative(BestEffortBroadcast.Port.class),
                 beb.getPositive(BestEffortBroadcast.Port.class), Channel.TWO_WAY);
         connector.connect(beb.getNegative(Network.class),
@@ -77,6 +78,7 @@ public class FailureDetector extends ComponentDefinition {
     private final Positive<Timer> timerPort = requires(Timer.class);
 
     private final Map<Address, Long> addresses = new HashMap<>();
+    private final Collection<Address> bebAddresses; //  need for crash-stop model
 
     private UUID timerId;
 
@@ -108,6 +110,7 @@ public class FailureDetector extends ComponentDefinition {
 
                 if (current - lastTime > 2 * DELAY) {
                     entry.setValue(-1L);
+                    bebAddresses.remove(address);
                     trigger(new Fail(address), port);
                 }
             }
@@ -128,6 +131,8 @@ public class FailureDetector extends ComponentDefinition {
             };
 
     public FailureDetector(Init init) {
+        this.bebAddresses = init.addresses;
+
         for (Address address : init.addresses) {
             addresses.put(address, 0L);
         }

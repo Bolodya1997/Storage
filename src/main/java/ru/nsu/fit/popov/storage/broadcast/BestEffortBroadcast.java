@@ -10,17 +10,17 @@ import java.util.*;
 
 public class BestEffortBroadcast extends ComponentDefinition {
 
-    static class Init extends se.sics.kompics.Init<BestEffortBroadcast> {
+    public static class Init extends se.sics.kompics.Init<BestEffortBroadcast> {
         private final Address myAddress;
         private final Collection<Address> addresses;    //  FIXME: change to FD correct list
 
-        Init(Address myAddress, Collection<Address> addresses) {
+        public Init(Address myAddress, Collection<Address> addresses) {
             this.myAddress = myAddress;
             this.addresses = addresses;
         }
     }
 
-    static class Broadcast implements KompicsEvent {
+    public static class Broadcast implements KompicsEvent {
         private final Serializable data;
 
         Broadcast(Serializable data) {
@@ -28,7 +28,7 @@ public class BestEffortBroadcast extends ComponentDefinition {
         }
     }
 
-    static class Deliver implements KompicsEvent {
+    public static class Deliver implements KompicsEvent {
         final Address source;
         final Serializable data;
 
@@ -39,7 +39,7 @@ public class BestEffortBroadcast extends ComponentDefinition {
     }
 
     public static class Port extends PortType {
-        {
+        public Port() {
             request(Broadcast.class);
             indication(Deliver.class);
         }

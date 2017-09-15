@@ -47,7 +47,7 @@ public class UniformBroadcast extends ComponentDefinition {
     }
 
     public static class Port extends PortType {
-        {
+        public Port() {
             request(Broadcast.class);
             indication(Deliver.class);
         }

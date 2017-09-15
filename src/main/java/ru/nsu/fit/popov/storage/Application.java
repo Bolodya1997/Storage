@@ -42,7 +42,7 @@ public class Application extends ComponentDefinition {
         final Component starter = Starter.create(this::create, this::connect,
                 new Starter.Init(myAddress, addresses, networkComponent));
         final Component chat = Chat.create(this::create, this::connect,
-                new Chat.Init(myAddress, addresses, networkComponent));
+                new Chat.Init(myAddress, addresses, starter, networkComponent));
         connect(chat.getNegative(StartPort.class),
                 starter.getPositive(StartPort.class), Channel.TWO_WAY);
     }

@@ -58,6 +58,8 @@ public class UniformBroadcast extends ComponentDefinition {
         }
     }
 
+    private static long DELAY = 10L;
+
     public static Component create(Creator creator, Connector connector, Init init) {
         final Component ub = creator.create(UniformBroadcast.class, init);
 
@@ -103,7 +105,7 @@ public class UniformBroadcast extends ComponentDefinition {
     private final Handler<Start> startHandler = new Handler<Start>() {
         @Override
         public void handle(Start event) {
-            final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, 10);   //  TODO: move to constant
+            final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, DELAY);
             final Timeout timeout = new Timeout(schedule);
             schedule.setTimeoutEvent(timeout);
 

@@ -28,14 +28,16 @@ public class Starter extends ComponentDefinition {
         }
     }
 
-    private static class HeartbeatTimeout extends se.sics.kompics.timer.Timeout {
-        private HeartbeatTimeout(SchedulePeriodicTimeout request) {
+    private static class Timeout extends se.sics.kompics.timer.Timeout {
+        private Timeout(SchedulePeriodicTimeout request) {
             super(request);
         }
     }
 
     private final static byte WAITING   = 0;
     private final static byte READY     = 1;
+
+    private final static long DELAY = 10L;
 
     static Component create(Creator creator, Connector connector, Init init) {
         final Component starter = creator.create(Starter.class, init);
@@ -67,8 +69,8 @@ public class Starter extends ComponentDefinition {
     private final Handler<Start> startHandler = new Handler<Start>() {
         @Override
         public void handle(Start start) {
-            final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, 10);   //  TODO: move to constant
-            final HeartbeatTimeout timeout = new HeartbeatTimeout(schedule);
+            final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, DELAY);
+            final Timeout timeout = new Timeout(schedule);
             schedule.setTimeoutEvent(timeout);
 
             trigger(schedule, timerPort);
@@ -76,9 +78,9 @@ public class Starter extends ComponentDefinition {
         }
     };
 
-    private final Handler<HeartbeatTimeout> timeoutHandler = new Handler<HeartbeatTimeout>() {
+    private final Handler<Timeout> timeoutHandler = new Handler<Timeout>() {
         @Override
-        public void handle(HeartbeatTimeout timeout) {
+        public void handle(Timeout timeout) {
             if (addresses.isEmpty()) {
                 suicide();
                 return;

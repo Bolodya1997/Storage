@@ -2,6 +2,8 @@ package ru.nsu.fit.popov.storage;
 
 import ru.nsu.fit.popov.storage.chat.Chat;
 import ru.nsu.fit.popov.storage.net.Address;
+import ru.nsu.fit.popov.storage.util.StartPort;
+import se.sics.kompics.Channel;
 import se.sics.kompics.Component;
 import se.sics.kompics.ComponentDefinition;
 import se.sics.kompics.network.netty.NettyInit;
@@ -37,8 +39,12 @@ public class Application extends ComponentDefinition {
         final NettyInit nettyInit = new NettyInit(myAddress);
         final Component networkComponent = create(NettyNetwork.class, nettyInit);
 
-        Chat.create(this::create, this::connect,
+        final Component starter = Starter.create(this::create, this::connect,
+                new Starter.Init(myAddress, addresses, networkComponent));
+        final Component chat = Chat.create(this::create, this::connect,
                 new Chat.Init(myAddress, addresses, networkComponent));
+        connect(chat.getNegative(StartPort.class),
+                starter.getPositive(StartPort.class), Channel.TWO_WAY);
     }
 
     private void readProperties() throws IOException {

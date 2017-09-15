@@ -4,6 +4,7 @@ import ru.nsu.fit.popov.storage.broadcast.UniformBroadcast;
 import ru.nsu.fit.popov.storage.net.Address;
 import ru.nsu.fit.popov.storage.util.Creator;
 import ru.nsu.fit.popov.storage.util.Connector;
+import ru.nsu.fit.popov.storage.util.StartPort;
 import se.sics.kompics.*;
 
 import java.util.Collection;
@@ -35,6 +36,7 @@ public class Chat extends ComponentDefinition {
         return chat;
     }
 
+    private final Positive<StartPort> startPort = requires(StartPort.class);
     private final Positive<UniformBroadcast.Port> ubPort = requires(UniformBroadcast.Port.class);
 
     private final Address myAddress;
@@ -59,7 +61,7 @@ public class Chat extends ComponentDefinition {
     public Chat(Init init) {
         myAddress = init.myAddress;
 
-        subscribe(startHandler, control);
+        subscribe(startHandler, startPort);
         subscribe(ubDeliverHandler, ubPort);
     }
 

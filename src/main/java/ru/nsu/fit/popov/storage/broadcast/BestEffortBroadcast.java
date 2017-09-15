@@ -46,10 +46,10 @@ public class BestEffortBroadcast extends ComponentDefinition {
     }
 
     private static class Message extends BaseMessage {
-        private final UUID handlerId;
+        private final int handlerId;
 
         private Message(Address source, Address destination, Serializable data,
-                        UUID handlerId) {
+                        int handlerId) {
             super(source, destination, data);
             this.handlerId = handlerId;
         }
@@ -58,7 +58,7 @@ public class BestEffortBroadcast extends ComponentDefinition {
     private final Negative<Port> port = provides(Port.class);
     private final Positive<Network> networkPort = requires(Network.class);
 
-    private final UUID myId = UUID.randomUUID();
+    private final int myId = Identifier.getId();
 
     private final Address myAddress;
     private final Collection<Address> addresses;

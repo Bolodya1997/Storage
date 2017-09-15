@@ -10,25 +10,26 @@ import se.sics.kompics.network.Network;
 import se.sics.kompics.timer.CancelPeriodicTimeout;
 import se.sics.kompics.timer.SchedulePeriodicTimeout;
 import se.sics.kompics.timer.Timer;
+import se.sics.kompics.timer.java.JavaTimer;
 
 import java.util.*;
 
 public class Starter extends ComponentDefinition {
 
-    public static class Init extends se.sics.kompics.Init<Starter> {
+    static class Init extends se.sics.kompics.Init<Starter> {
         private final Address myAddress;
         private final Collection<Address> addresses;
         private final Component networkComponent;
 
-        public Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {
+        Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {
             this.myAddress = myAddress;
             this.addresses = addresses;
             this.networkComponent = networkComponent;
         }
     }
 
-    private static class Timeout extends se.sics.kompics.timer.Timeout {
-        private Timeout(SchedulePeriodicTimeout request) {
+    private static class HeartbeatTimeout extends se.sics.kompics.timer.Timeout {
+        private HeartbeatTimeout(SchedulePeriodicTimeout request) {
             super(request);
         }
     }
@@ -36,8 +37,12 @@ public class Starter extends ComponentDefinition {
     private final static byte WAITING   = 0;
     private final static byte READY     = 1;
 
-    public static Component create(Creator creator, Connector connector, Init init) {
+    static Component create(Creator creator, Connector connector, Init init) {
         final Component starter = creator.create(Starter.class, init);
+
+        final Component timer = creator.create(JavaTimer.class, null);
+        connector.connect(starter.getNegative(Timer.class),
+                timer.getPositive(Timer.class), Channel.TWO_WAY);
 
         final Component beb = creator.create(BestEffortBroadcast.class,
                 new BestEffortBroadcast.Init(init.myAddress, init.addresses));
@@ -63,7 +68,7 @@ public class Starter extends ComponentDefinition {
         @Override
         public void handle(Start start) {
             final SchedulePeriodicTimeout schedule = new SchedulePeriodicTimeout(0, 10);   //  TODO: move to constant
-            final Timeout timeout = new Timeout(schedule);
+            final HeartbeatTimeout timeout = new HeartbeatTimeout(schedule);
             schedule.setTimeoutEvent(timeout);
 
             trigger(schedule, timerPort);
@@ -71,16 +76,16 @@ public class Starter extends ComponentDefinition {
         }
     };
 
-    private final Handler<Timeout> timeoutHandler = new Handler<Timeout>() {
+    private final Handler<HeartbeatTimeout> timeoutHandler = new Handler<HeartbeatTimeout>() {
         @Override
-        public void handle(Timeout timeout) {
+        public void handle(HeartbeatTimeout timeout) {
             if (addresses.isEmpty()) {
                 suicide();
                 return;
             }
 
             if (!woken) {
-                woken = addresses.values().stream().anyMatch(value -> !value);
+                woken = addresses.values().stream().allMatch(Boolean::booleanValue);
                 if (woken)
                     trigger(Start.event, startPort);
             }
@@ -92,7 +97,7 @@ public class Starter extends ComponentDefinition {
         }
     };
 
-    public final Handler<BestEffortBroadcast.Deliver> bebDeliverHandler =
+    private final Handler<BestEffortBroadcast.Deliver> bebDeliverHandler =
             new Handler<BestEffortBroadcast.Deliver>() {
                 @Override
                 public void handle(BestEffortBroadcast.Deliver bebDeliver) {

@@ -9,33 +9,27 @@ class ReplicationPolicy {
     private final static int REPLICATION_DEGREE = 3;
 
     private final Map<Address, Boolean> addresses = new HashMap<>();
-    private final int myNumber;
 
-    ReplicationPolicy(List<Address> addresses, int myNumber) {
+    ReplicationPolicy(Collection<Address> addresses) {
         for (Address address : addresses) {
             this.addresses.put(address, true);
         }
-        this.myNumber = myNumber;
     }
 
     void fail(Address address) {
         addresses.put(address, false);
     }
 
-    boolean canSave(String key) {
-        List<Integer> numbers = new ArrayList<>();
-        for (Map.Entry<Address, Boolean> entry : addresses.entrySet()) {
-            if (entry.getValue())
-                numbers.add(numbers.size());
-            else
-                numbers.add(-1);
-        }
+    boolean canSave(Address myAddress, String key) {
+        final int myNumber = computeMyNumber(myAddress);
+        final List<Integer> numbers = fillNumbers();
 
         int parts = addresses.size();
         double width = Integer.MAX_VALUE;
         double current = key.hashCode();
         int count = 0;
         int pos, number;
+
         while (count < REPLICATION_DEGREE) {
             width /= parts; //  assumes that parts is always > 0
 
@@ -54,5 +48,27 @@ class ReplicationPolicy {
         }
 
         return false;
+    }
+
+    private int computeMyNumber(Address myAddress) {
+        int myNumber = 0;
+        for (Address address : addresses.keySet()) {
+            if (Objects.equals(address, myAddress))
+                return myNumber;
+            ++myNumber;
+        }
+
+        throw new RuntimeException("Address is out of list");
+    }
+
+    private List<Integer> fillNumbers() {
+        List<Integer> numbers = new ArrayList<>();
+        for (Map.Entry<Address, Boolean> entry : addresses.entrySet()) {
+            if (entry.getValue())
+                numbers.add(numbers.size());
+            else
+                numbers.add(-1);
+        }
+        return numbers;
     }
 }

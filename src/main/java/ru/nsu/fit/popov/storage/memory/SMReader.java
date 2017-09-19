@@ -9,9 +9,9 @@ import se.sics.kompics.PortType;
 import java.util.Collection;
 import java.util.Map;
 
-public class SMWriter extends ComponentDefinition {
+public class SMReader extends ComponentDefinition {
 
-    static class Init extends se.sics.kompics.Init<SMWriter> {
+    static class Init extends se.sics.kompics.Init<SMReader> {
         private final Address myAddress;
         private final Collection<Address> addresses;
         private final Component networkComponent;

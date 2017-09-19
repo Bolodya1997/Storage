@@ -14,26 +14,23 @@ import java.util.Map;
 public class SharedMemory extends ComponentDefinition {
 
     public static class Init extends se.sics.kompics.Init<SharedMemory> {
-        private final int number;
         private final Address myAddress;
         private final Collection<Address> addresses;
         private final Component starter;
         private final Component networkComponent;
 
-        public Init(int number, Address myAddress, Collection<Address> addresses,
+        private final Map<String, Data> memory = new HashMap<>();
+        private final ReplicationPolicy policy;
+
+        public Init(Address myAddress, Collection<Address> addresses,
                     Component starter, Component networkComponent) {
-            this.number = number;
             this.myAddress = myAddress;
             this.addresses = addresses;
             this.starter = starter;
             this.networkComponent = networkComponent;
-        }
-    }
 
-    public enum Code {
-        SUCCESS,
-        BAD_KEY,
-        LOST_DATA
+            policy = new ReplicationPolicy(addresses);
+        }
     }
 
     public static class WriteRequest extends Direct.Request<WriteResponse> {
@@ -82,37 +79,96 @@ public class SharedMemory extends ComponentDefinition {
     }
 
     public static Component create(Creator creator, Connector connector, Init init) {
-        final Component chat = creator.create(SharedMemory.class, init);
+        final Component memory = creator.create(SharedMemory.class, init);
 
-        //  FIXME: SMWriter
+        final Component writer = creator.create(SMWriter.class,
+                new SMWriter.Init(init.myAddress, init.addresses, init.networkComponent,
+                        init.memory, init.policy));
+        connector.connect(memory.getNegative(SMWriter.Port.class),
+                writer.getPositive(SMWriter.Port.class), Channel.TWO_WAY);
 
-        //  FIXME: SMReader
+        final Component reader = creator.create(SMReader.class,
+                new SMReader.Init(init.myAddress, init.addresses, init.networkComponent,
+                        init.memory, init.policy));
+        connector.connect(memory.getNegative(SMReader.Port.class),
+                reader.getPositive(SMReader.Port.class), Channel.TWO_WAY);
 
         final Component fd = FailureDetector.create(creator, connector,
                 new FailureDetector.Init(init.myAddress, init.addresses, init.networkComponent));
         connector.connect(fd.getNegative(StartPort.class),
                 init.starter.getPositive(StartPort.class), Channel.TWO_WAY);
-        connector.connect(chat.getNegative(FailureDetector.Port.class),
+        connector.connect(memory.getNegative(FailureDetector.Port.class),
                 fd.getPositive(FailureDetector.Port.class), Channel.TWO_WAY);
 
-        return chat;
+        return memory;
     }
 
+//    ------   interface ports   ------
     private final Negative<Port> port = provides(Port.class);
-    private final Positive<FailureDetector.Port> fdPort =
-            requires(FailureDetector.Port.class);
 
-    private final Map<String, Data> memory = new HashMap<>();
+//    ------   implementation ports   ------
+    private final Positive<SMWriter.Port> writerPort = requires(SMWriter.Port.class);
+    private final Positive<SMReader.Port> readerPort = requires(SMReader.Port.class);
+    private final Positive<FailureDetector.Port> fdPort = requires(FailureDetector.Port.class);
 
-    private final int myNumber;
-    private final Map<Address, Boolean> addresses = new HashMap<>();
-    private final Collection<Address> broadcastAddresses;
+    private final Collection<Address> addresses;
+    private final ReplicationPolicy policy;
+
+    private final Handler<WriteRequest> writeRequestHandler = new Handler<WriteRequest>() {
+        @Override
+        public void handle(WriteRequest writeRequest) {
+            final SMWriter.Request request = new SMWriter.Request(writeRequest.key);
+            trigger(request, writerPort);
+        }
+    };
+
+    private final Handler<ReadRequest> readRequestHandler = new Handler<ReadRequest>() {
+        @Override
+        public void handle(ReadRequest readRequest) {
+            final SMReader.Request request = new SMReader.Request(readRequest.key);
+            trigger(request, readerPort);
+        }
+    };
+
+    private final Handler<SMWriter.Response> writerResponseHandler =
+            new Handler<SMWriter.Response>() {
+                @Override
+                public void handle(SMWriter.Response response) {
+                    final WriteResponse writeResponse =
+                            new WriteResponse(response.code, response.value);
+                    trigger(response, port);
+                }
+            };
+
+    private final Handler<SMReader.Response> readerResponseHandler =
+            new Handler<SMReader.Response>() {
+                @Override
+                public void handle(SMReader.Response response) {
+                    final ReadResponse readResponse =
+                            new ReadResponse(response.code, response.value);
+                    trigger(response, port);
+                }
+            };
+
+    private final Handler<FailureDetector.Fail> failHandler = new Handler<FailureDetector.Fail>() {
+        @Override
+        public void handle(FailureDetector.Fail fail) {
+            addresses.remove(fail.address);
+
+            //  FIXME: lost data replication
+
+            policy.fail(fail.address);
+        }
+    };
 
     public SharedMemory(Init init) {
-        myNumber = init.number;
-        for (Address address : init.addresses) {
-            addresses.put(address, true);
-        }
-        broadcastAddresses = init.addresses;
+        addresses = init.addresses;
+        policy = init.policy;
+
+        subscribe(writeRequestHandler, port);
+        subscribe(readRequestHandler, port);
+        subscribe(writerResponseHandler, writerPort);
+        subscribe(readerResponseHandler, readerPort);
+        subscribe(failHandler, fdPort);
     }
 }

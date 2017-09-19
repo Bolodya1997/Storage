@@ -93,7 +93,7 @@ public class UniformBroadcast extends ComponentDefinition {
     private final Handler<Broadcast> broadcastHandler = new Handler<Broadcast>() {
         @Override
         public void handle(Broadcast broadcast) {
-            final BroadcastData data = new BroadcastData(broadcast.data);
+            final BroadcastData data = new BroadcastData(myAddress, broadcast.data);
             pending.put(data, new ArrayList<>());
 
             final BestEffortBroadcast.Broadcast bebBroadcast =
@@ -144,7 +144,7 @@ public class UniformBroadcast extends ComponentDefinition {
                 if (sources.containsAll(addresses)) {
                     delivered.add(entry.getKey());
 
-                    final Deliver deliver = new Deliver(sources.get(0), data.getData());
+                    final Deliver deliver = new Deliver(data.getPureSource(), data.getData());
                     trigger(deliver, port);
                 }
             }

@@ -1,5 +1,7 @@
 package ru.nsu.fit.popov.storage.broadcast;
 
+import ru.nsu.fit.popov.storage.net.Address;
+
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.UUID;
@@ -8,14 +10,20 @@ class BroadcastData implements Serializable {
 
     private final UUID id = UUID.randomUUID();
 
+    private final Address pureSource;
     private final Serializable data;
 
-    BroadcastData(Serializable data) {
+    BroadcastData(Address pureSource, Serializable data) {
+        this.pureSource = pureSource;
         this.data = data;
     }
 
     UUID getId() {
         return id;
+    }
+
+    Address getPureSource() {
+        return pureSource;
     }
 
     Serializable getData() {
@@ -29,7 +37,7 @@ class BroadcastData implements Serializable {
         if (o == null || getClass() != o.getClass())
             return false;
 
-        BroadcastData broadcastData = (BroadcastData) o;
+        final BroadcastData broadcastData = (BroadcastData) o;
         return Objects.equals(id, broadcastData.id);
     }
 

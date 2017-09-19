@@ -18,10 +18,6 @@ class BroadcastData implements Serializable {
         this.data = data;
     }
 
-    UUID getId() {
-        return id;
-    }
-
     Address getPureSource() {
         return pureSource;
     }

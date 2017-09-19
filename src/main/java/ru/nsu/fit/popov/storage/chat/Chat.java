@@ -16,7 +16,7 @@ public class Chat extends ComponentDefinition {
 
     public static class Init extends se.sics.kompics.Init<Chat> {
         private final Address myAddress;
-        private final Collection<Address> addresses;    //  FIXME: change to FD correct list
+        private final Collection<Address> addresses;
         private final Component starter;
         private final Component networkComponent;
 

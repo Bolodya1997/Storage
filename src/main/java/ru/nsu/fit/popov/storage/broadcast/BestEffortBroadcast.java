@@ -12,7 +12,7 @@ public class BestEffortBroadcast extends ComponentDefinition {
 
     public static class Init extends se.sics.kompics.Init<BestEffortBroadcast> {
         private final Address myAddress;
-        private final Collection<Address> addresses;    //  FIXME: change to FD correct list
+        private final Collection<Address> addresses;
 
         public Init(Address myAddress, Collection<Address> addresses) {
             this.myAddress = myAddress;

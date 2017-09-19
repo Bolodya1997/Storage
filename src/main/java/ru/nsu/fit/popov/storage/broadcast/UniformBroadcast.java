@@ -17,7 +17,7 @@ public class UniformBroadcast extends ComponentDefinition {
 
     public static class Init extends se.sics.kompics.Init<UniformBroadcast> {
         private final Address myAddress;
-        private final Collection<Address> addresses;    //  FIXME: change to FD correct list
+        private final Collection<Address> addresses;
         private final Component networkComponent;
 
         public Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {

@@ -98,15 +98,15 @@ public class SMWriter extends ComponentDefinition {
     private final ReplicationPolicy policy;
 
     private KeyData pendingData;
-    private Set<Address> seqAddresses;
-    private Map<Address, Byte> ackAddresses;
+    private Set<Address> seqAddresses = new HashSet<>();
+    private Map<Address, Byte> ackAddresses = new HashMap<>();
 
     private final Handler<Request> requestHandler = new Handler<Request>() {
         @Override
         public void handle(Request request) {
             final Data data = new Data(request.value);
             pendingData = new KeyData(request.key, data);
-            seqAddresses = new HashSet<>();
+            seqAddresses.clear();
 
             final UniformBroadcast.Broadcast ubBroadcast =
                     new UniformBroadcast.Broadcast(request.key);
@@ -125,8 +125,10 @@ public class SMWriter extends ComponentDefinition {
                         data.setSequenceNumber(sequenceNumber);
 
                     seqAddresses.add(sequenceResponse.getSource());
-                    if (seqAddresses.containsAll(addresses))    //  FIXME: do on timeout
+                    if (seqAddresses.containsAll(addresses)) {  //  FIXME: do on timeout
+                        seqAddresses.clear();
                         ackRequest();
+                    }
                 }
             };
 
@@ -135,24 +137,23 @@ public class SMWriter extends ComponentDefinition {
                 @Override
                 public void handle(WriteAcknowledge acknowledge) {
                     ackAddresses.put(acknowledge.getSource(), (Byte) acknowledge.getData());
-                    if (!ackAddresses.keySet().containsAll(addresses))  //  FIXME: do on timeout
-                        return;
+                    if (ackAddresses.keySet().containsAll(addresses)) { //  FIXME: do on timeout
+                        if (ackAddresses.values().contains(BAD_SEQ)) {
+                            retryPending();
+                            return;
+                        }
 
-                    if (ackAddresses.values().contains(BAD_SEQ)) {
-                        retryPending();
-                        return;
+                        int ackCount = (int) ackAddresses.values().stream()
+                                .filter(code -> code == SUCCESS)
+                                .count();
+
+                        Response response;
+                        if (ackCount < ReplicationPolicy.REPLICATION_DEGREE)
+                            response = new Response(Code.LOST_DATA);
+                        else
+                            response = new Response(Code.SUCCESS);
+                        trigger(response, port);
                     }
-
-                    int ackCount = (int) ackAddresses.values().stream()
-                            .filter(code -> code == SUCCESS)
-                            .count();
-
-                    Response response;
-                    if (ackCount < ReplicationPolicy.REPLICATION_DEGREE)
-                        response = new Response(Code.LOST_DATA);
-                    else
-                        response = new Response(Code.SUCCESS);
-                    trigger(response, port);
                 }
             };
 
@@ -196,10 +197,10 @@ public class SMWriter extends ComponentDefinition {
     }
 
     private void ackRequest() {
-        ackAddresses = new HashMap<>();
-
         final int sequenceNumber = pendingData.getData().getSequenceNumber() + 1;
         pendingData.getData().setSequenceNumber(sequenceNumber);
+
+        ackAddresses.clear();
 
         final UniformBroadcast.Broadcast ubBroadcast = new UniformBroadcast.Broadcast(pendingData);
         trigger(ubBroadcast, ubPort);

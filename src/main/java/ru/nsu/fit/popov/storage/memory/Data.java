@@ -1,6 +1,8 @@
 package ru.nsu.fit.popov.storage.memory;
 
-class Data {
+import java.io.Serializable;
+
+class Data implements Serializable {
 
     private int value;
     private int sequenceNumber;

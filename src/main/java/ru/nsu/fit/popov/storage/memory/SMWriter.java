@@ -1,13 +1,14 @@
 package ru.nsu.fit.popov.storage.memory;
 
+import ru.nsu.fit.popov.storage.broadcast.UniformBroadcast;
 import ru.nsu.fit.popov.storage.net.Address;
-import se.sics.kompics.Component;
-import se.sics.kompics.ComponentDefinition;
-import se.sics.kompics.Direct;
-import se.sics.kompics.PortType;
+import ru.nsu.fit.popov.storage.net.BaseMessage;
+import ru.nsu.fit.popov.storage.util.Connector;
+import ru.nsu.fit.popov.storage.util.Creator;
+import se.sics.kompics.*;
+import se.sics.kompics.network.Network;
 
-import java.util.Collection;
-import java.util.Map;
+import java.util.*;
 
 public class SMWriter extends ComponentDefinition {
 
@@ -31,19 +32,19 @@ public class SMWriter extends ComponentDefinition {
 
     static class Request extends Direct.Request<Response> {
         private final String key;
+        private final int value;
 
-        Request(String key) {
+        Request(String key, int value) {
             this.key = key;
+            this.value = value;
         }
     }
 
     static class Response implements Direct.Response {
         final Code code;
-        final int value;
 
-        private Response(Code code, int value) {
+        private Response(Code code) {
             this.code = code;
-            this.value = value;
         }
     }
 
@@ -52,5 +53,176 @@ public class SMWriter extends ComponentDefinition {
             request(Request.class);
             indication(Response.class);
         }
+    }
+
+    private class SequenceResponse extends BaseMessage {
+        private SequenceResponse(Address destination, int sequenceNumber) {
+            super(myAddress, destination, sequenceNumber);
+        }
+    }
+
+    private static final byte SUCCESS  = 0;
+    private static final byte BAD_SEQ  = 1;
+    private static final byte NOT_MINE = 2;
+
+    private class WriteAcknowledge extends BaseMessage {
+        private WriteAcknowledge(Address destination, int code) {
+            super(myAddress, destination, code);
+        }
+    }
+
+    static Component create(Creator creator, Connector connector, Init init) {
+        final Component writer = creator.create(SMWriter.class, init);
+        connector.connect(writer.getNegative(Network.class),
+                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
+
+        final Component ub = UniformBroadcast.create(creator, connector,
+                new UniformBroadcast.Init(init.myAddress, init.addresses, init.networkComponent));
+        connector.connect(writer.getNegative(UniformBroadcast.Port.class),
+                ub.getPositive(UniformBroadcast.Port.class), Channel.TWO_WAY);
+
+        return writer;
+    }
+
+//    ------   interface ports   ------
+    private final Negative<Port> port = provides(Port.class);
+
+//    ------   implementation ports   ------
+    private final Positive<UniformBroadcast.Port> ubPort = requires(UniformBroadcast.Port.class);
+    private final Positive<Network> networkPort = requires(Network.class);
+
+    private final Address myAddress;
+    private final Collection<Address> addresses;
+
+    private final Map<String, Data> memory;
+    private final ReplicationPolicy policy;
+
+    private KeyData pendingData;
+    private Set<Address> seqAddresses;
+    private Map<Address, Byte> ackAddresses;
+
+    private final Handler<Request> requestHandler = new Handler<Request>() {
+        @Override
+        public void handle(Request request) {
+            final Data data = new Data(request.value);
+
+            //  FIXME: check key with policy
+
+            pendingData = new KeyData(request.key, data);
+            seqAddresses = new HashSet<>();
+
+            final UniformBroadcast.Broadcast ubBroadcast =
+                    new UniformBroadcast.Broadcast(request.key);
+            trigger(ubBroadcast, ubPort);
+        }
+    };
+
+    private final Handler<SequenceResponse> sequenceResponseHandler =
+            new Handler<SequenceResponse>() {
+                @Override
+                public void handle(SequenceResponse sequenceResponse) {
+                    final Data data = pendingData.getData();
+
+                    final int sequenceNumber = (int) sequenceResponse.getData();
+                    if (data.getSequenceNumber() < sequenceNumber)
+                        data.setSequenceNumber(sequenceNumber);
+
+                    seqAddresses.add(sequenceResponse.getSource());
+                    if (seqAddresses.containsAll(addresses))    //  FIXME: do on timeout
+                        ackRequest();
+                }
+            };
+
+    private final Handler<WriteAcknowledge> writeAcknowledgeHandler =
+            new Handler<WriteAcknowledge>() {
+                @Override
+                public void handle(WriteAcknowledge acknowledge) {
+                    ackAddresses.put(acknowledge.getSource(), (Byte) acknowledge.getData());
+                    if (!ackAddresses.keySet().containsAll(addresses))  //  FIXME: do on timeout
+                        return;
+
+                    if (ackAddresses.values().contains(BAD_SEQ)) {
+                        retryPending();
+                        return;
+                    }
+
+                    int ackCount = (int) ackAddresses.values().stream()
+                            .filter(code -> code == SUCCESS)
+                            .count();
+
+                    Response response;
+                    if (ackCount < ReplicationPolicy.REPLICATION_DEGREE)
+                        response = new Response(Code.LOST_DATA);
+                    else
+                        response = new Response(Code.SUCCESS);
+                    trigger(response, port);
+                }
+            };
+
+    private final Handler<UniformBroadcast.Deliver> ubDeliverHandler =
+            new Handler<UniformBroadcast.Deliver>() {
+                @Override
+                public void handle(UniformBroadcast.Deliver ubDeliver) {
+                    if (ubDeliver.data instanceof String)
+                        seqRequestHandler(ubDeliver.source, (String) ubDeliver.data);
+                    else if (ubDeliver.data instanceof KeyData)
+                        ackRequestHandler(ubDeliver.source, (KeyData) ubDeliver.data);
+                    else
+                        throw new RuntimeException("Invalid request");
+                }
+            };
+
+    SMWriter(Init init) {
+        myAddress = init.myAddress;
+        addresses = init.addresses;
+        memory = init.memory;
+        policy = init.policy;
+
+        subscribe(requestHandler, port);
+        subscribe(sequenceResponseHandler, networkPort);
+        subscribe(writeAcknowledgeHandler, networkPort);
+        subscribe(ubDeliverHandler, ubPort);
+    }
+
+    private void retryPending() {
+        final Request request =
+                new Request(pendingData.getKey(), pendingData.getData().getValue());
+        trigger(request, port);
+    }
+
+    private void seqRequestHandler(Address source, String key) {
+        final Data data = memory.get(key);
+        final int sequenceNumber = (data != null) ? data.getSequenceNumber() : 0;
+
+        final SequenceResponse response = new SequenceResponse(source, sequenceNumber);
+        trigger(response, networkPort);
+    }
+
+    private void ackRequest() {
+        ackAddresses = new HashMap<>();
+
+        final int sequenceNumber = pendingData.getData().getSequenceNumber() + 1;
+        pendingData.getData().setSequenceNumber(sequenceNumber);
+
+        final UniformBroadcast.Broadcast ubBroadcast = new UniformBroadcast.Broadcast(pendingData);
+        trigger(ubBroadcast, ubPort);
+
+        //  FIXME: add timeout
+    }
+
+    private void ackRequestHandler(Address source, KeyData keyData) {
+        final Data myData = memory.get(keyData.getKey());
+        final Data otherData = keyData.getData();
+
+        WriteAcknowledge acknowledge;
+        if (myData == null) {
+            acknowledge = new WriteAcknowledge(source, NOT_MINE);
+        } else if (myData.getSequenceNumber() >= otherData.getSequenceNumber()) {
+            acknowledge = new WriteAcknowledge(source, BAD_SEQ);
+        } else {
+            memory.put(keyData.getKey(), otherData);
+            acknowledge = new WriteAcknowledge(source, SUCCESS);
+        }
+        trigger(acknowledge, networkPort);
     }
 }

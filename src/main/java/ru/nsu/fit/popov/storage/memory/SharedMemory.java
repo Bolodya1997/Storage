@@ -35,19 +35,19 @@ public class SharedMemory extends ComponentDefinition {
 
     public static class WriteRequest extends Direct.Request<WriteResponse> {
         private final String key;
+        private final int value;
 
-        public WriteRequest(String key) {
+        public WriteRequest(String key, int value) {
             this.key = key;
+            this.value = value;
         }
     }
 
     public static class WriteResponse implements Direct.Response {
         public final Code code;
-        public final int value;
 
-        private WriteResponse(Code code, int value) {
+        private WriteResponse(Code code) {
             this.code = code;
-            this.value = value;
         }
     }
 
@@ -81,7 +81,7 @@ public class SharedMemory extends ComponentDefinition {
     public static Component create(Creator creator, Connector connector, Init init) {
         final Component memory = creator.create(SharedMemory.class, init);
 
-        final Component writer = creator.create(SMWriter.class,
+        final Component writer = SMWriter.create(creator, connector,
                 new SMWriter.Init(init.myAddress, init.addresses, init.networkComponent,
                         init.memory, init.policy));
         connector.connect(memory.getNegative(SMWriter.Port.class),
@@ -117,7 +117,8 @@ public class SharedMemory extends ComponentDefinition {
     private final Handler<WriteRequest> writeRequestHandler = new Handler<WriteRequest>() {
         @Override
         public void handle(WriteRequest writeRequest) {
-            final SMWriter.Request request = new SMWriter.Request(writeRequest.key);
+            final SMWriter.Request request
+                    = new SMWriter.Request(writeRequest.key, writeRequest.value);
             trigger(request, writerPort);
         }
     };
@@ -135,8 +136,8 @@ public class SharedMemory extends ComponentDefinition {
                 @Override
                 public void handle(SMWriter.Response response) {
                     final WriteResponse writeResponse =
-                            new WriteResponse(response.code, response.value);
-                    trigger(response, port);
+                            new WriteResponse(response.code);
+                    trigger(writeResponse, port);
                 }
             };
 
@@ -146,7 +147,7 @@ public class SharedMemory extends ComponentDefinition {
                 public void handle(SMReader.Response response) {
                     final ReadResponse readResponse =
                             new ReadResponse(response.code, response.value);
-                    trigger(response, port);
+                    trigger(readResponse, port);
                 }
             };
 

@@ -6,7 +6,7 @@ import java.util.*;
 
 class ReplicationPolicy {
 
-    private final static int REPLICATION_DEGREE = 3;
+    final static int REPLICATION_DEGREE = 3;
 
     private final Map<Address, Boolean> addresses = new HashMap<>();
 

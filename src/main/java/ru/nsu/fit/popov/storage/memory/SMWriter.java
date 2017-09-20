@@ -105,9 +105,6 @@ public class SMWriter extends ComponentDefinition {
         @Override
         public void handle(Request request) {
             final Data data = new Data(request.value);
-
-            //  FIXME: check key with policy
-
             pendingData = new KeyData(request.key, data);
             seqAddresses = new HashSet<>();
 

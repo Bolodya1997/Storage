@@ -30,7 +30,7 @@ public class SMWriter extends ComponentDefinition {
         }
     }
 
-    static class Request extends Direct.Request<Response> {
+    static class Request implements KompicsEvent {
         private final String key;
         private final int value;
 
@@ -40,7 +40,7 @@ public class SMWriter extends ComponentDefinition {
         }
     }
 
-    static class Response implements Direct.Response {
+    static class Response implements KompicsEvent {
         final Code code;
 
         private Response(Code code) {
@@ -55,9 +55,9 @@ public class SMWriter extends ComponentDefinition {
         }
     }
 
-    private class SequenceResponse extends BaseMessage {
-        private SequenceResponse(Address destination, int sequenceNumber) {
-            super(myAddress, destination, sequenceNumber);
+    private static class SequenceResponse extends BaseMessage {
+        private SequenceResponse(Address source, Address destination, int sequenceNumber) {
+            super(source, destination, sequenceNumber);
         }
     }
 
@@ -65,9 +65,9 @@ public class SMWriter extends ComponentDefinition {
     private static final byte BAD_SEQ  = 1;
     private static final byte NOT_MINE = 2;
 
-    private class WriteAcknowledge extends BaseMessage {
-        private WriteAcknowledge(Address destination, int code) {
-            super(myAddress, destination, code);
+    private static class WriteAcknowledge extends BaseMessage {
+        private WriteAcknowledge(Address source, Address destination, byte code) {
+            super(source, destination, code);
         }
     }
 
@@ -98,8 +98,8 @@ public class SMWriter extends ComponentDefinition {
     private final ReplicationPolicy policy;
 
     private KeyData pendingData;
-    private Set<Address> seqAddresses = new HashSet<>();
-    private Map<Address, Byte> ackAddresses = new HashMap<>();
+    private final Set<Address> seqAddresses = new HashSet<>();
+    private final Map<Address, Byte> ackAddresses = new HashMap<>();
 
     private final Handler<Request> requestHandler = new Handler<Request>() {
         @Override
@@ -170,7 +170,7 @@ public class SMWriter extends ComponentDefinition {
                 }
             };
 
-    SMWriter(Init init) {
+    public SMWriter(Init init) {
         myAddress = init.myAddress;
         addresses = init.addresses;
         memory = init.memory;
@@ -192,7 +192,7 @@ public class SMWriter extends ComponentDefinition {
         final Data data = memory.get(key);
         final int sequenceNumber = (data != null) ? data.getSequenceNumber() : 0;
 
-        final SequenceResponse response = new SequenceResponse(source, sequenceNumber);
+        final SequenceResponse response = new SequenceResponse(myAddress, source, sequenceNumber);
         trigger(response, networkPort);
     }
 
@@ -216,15 +216,15 @@ public class SMWriter extends ComponentDefinition {
         if (myData == null) {
             if (policy.canSave(myAddress, keyData.getKey())) {
                 memory.put(keyData.getKey(), otherData);
-                acknowledge = new WriteAcknowledge(source, SUCCESS);
+                acknowledge = new WriteAcknowledge(myAddress, source, SUCCESS);
             } else {
-                acknowledge = new WriteAcknowledge(source, NOT_MINE);
+                acknowledge = new WriteAcknowledge(myAddress, source, NOT_MINE);
             }
         } else if (myData.getSequenceNumber() >= otherData.getSequenceNumber()) {
-            acknowledge = new WriteAcknowledge(source, BAD_SEQ);
+            acknowledge = new WriteAcknowledge(myAddress, source, BAD_SEQ);    //  TODO: think about equals case
         } else {
             memory.put(keyData.getKey(), otherData);
-            acknowledge = new WriteAcknowledge(source, SUCCESS);
+            acknowledge = new WriteAcknowledge(myAddress, source, SUCCESS);
         }
         trigger(acknowledge, networkPort);
     }

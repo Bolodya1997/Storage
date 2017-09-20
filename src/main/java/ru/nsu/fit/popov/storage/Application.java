@@ -1,6 +1,7 @@
 package ru.nsu.fit.popov.storage;
 
-import ru.nsu.fit.popov.storage.chat.Chat;
+import ru.nsu.fit.popov.storage.chat.Client;
+import ru.nsu.fit.popov.storage.memory.SharedMemory;
 import ru.nsu.fit.popov.storage.net.Address;
 import ru.nsu.fit.popov.storage.util.StartPort;
 import se.sics.kompics.Channel;
@@ -38,13 +39,17 @@ public class Application extends ComponentDefinition {
 
         final NettyInit nettyInit = new NettyInit(myAddress);
         final Component networkComponent = create(NettyNetwork.class, nettyInit);
+        final Component client = create(Client.class, se.sics.kompics.Init.NONE);
 
         final Component starter = Starter.create(this::create, this::connect,
                 new Starter.Init(myAddress, addresses, networkComponent));
-        final Component chat = Chat.create(this::create, this::connect,
-                new Chat.Init(myAddress, addresses, starter, networkComponent));
-        connect(chat.getNegative(StartPort.class),
+        connect(client.getNegative(StartPort.class),
                 starter.getPositive(StartPort.class), Channel.TWO_WAY);
+
+        final Component sm = SharedMemory.create(this::create, this::connect,
+                new SharedMemory.Init(myAddress, addresses, starter, networkComponent));
+        connect(client.getNegative(SharedMemory.Port.class),
+                sm.getPositive(SharedMemory.Port.class), Channel.TWO_WAY);
     }
 
     private void readProperties() throws IOException {
@@ -52,8 +57,8 @@ public class Application extends ComponentDefinition {
         properties.load(Application.class.getResourceAsStream("config.properties"));
 
         addresses = Arrays.stream(properties.getProperty("addresses")
-                .replaceAll(" ", "")
-                .split(","))
+                    .replaceAll(" ", "")
+                    .split(","))
                 .map(Address::new)
                 .collect(Collectors.toList());
     }

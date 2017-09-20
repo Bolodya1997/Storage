@@ -33,7 +33,7 @@ public class SharedMemory extends ComponentDefinition {
         }
     }
 
-    public static class WriteRequest extends Direct.Request<WriteResponse> {
+    public static class WriteRequest implements KompicsEvent {
         private final String key;
         private final int value;
 
@@ -43,7 +43,7 @@ public class SharedMemory extends ComponentDefinition {
         }
     }
 
-    public static class WriteResponse implements Direct.Response {
+    public static class WriteResponse implements KompicsEvent {
         public final Code code;
 
         private WriteResponse(Code code) {
@@ -51,7 +51,7 @@ public class SharedMemory extends ComponentDefinition {
         }
     }
 
-    public static class ReadRequest extends Direct.Request<ReadResponse> {
+    public static class ReadRequest implements KompicsEvent {
         private final String key;
 
         public ReadRequest(String key) {
@@ -59,7 +59,7 @@ public class SharedMemory extends ComponentDefinition {
         }
     }
 
-    public static class ReadResponse implements Direct.Response {
+    public static class ReadResponse implements KompicsEvent {
         public final Code code;
         public final int value;
 
@@ -154,6 +154,8 @@ public class SharedMemory extends ComponentDefinition {
     private final Handler<FailureDetector.Fail> failHandler = new Handler<FailureDetector.Fail>() {
         @Override
         public void handle(FailureDetector.Fail fail) {
+            System.err.printf("[%s] FAILED\n", fail.address);
+
             addresses.remove(fail.address);
 
             //  FIXME: lost data replication

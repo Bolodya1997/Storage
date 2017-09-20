@@ -6,7 +6,7 @@ import java.util.*;
 
 class ReplicationPolicy {
 
-    final static int REPLICATION_DEGREE = 3;
+    final static int REPLICATION_DEGREE = 2;
 
     private final Map<Address, Boolean> addresses = new HashMap<>();
 
@@ -25,15 +25,18 @@ class ReplicationPolicy {
         final List<Integer> numbers = fillNumbers();
 
         int parts = addresses.size();
-        double width = Integer.MAX_VALUE;
-        double current = key.hashCode();
+        double width = Integer.MAX_VALUE - ((long) Integer.MIN_VALUE);
+        double current = key.hashCode() - ((long) Integer.MIN_VALUE);
         int count = 0;
         int pos, number;
 
         while (count < REPLICATION_DEGREE) {
             width /= parts; //  assumes that parts is always > 0
 
-            pos = (int) Math.round(current / width);
+            pos = (int) (current / width);
+            if (pos == numbers.size())
+                --pos;
+
             number = numbers.get(pos);
             if (number == myNumber) {
                 return true;

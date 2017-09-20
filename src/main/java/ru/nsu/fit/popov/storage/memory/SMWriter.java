@@ -213,7 +213,12 @@ public class SMWriter extends ComponentDefinition {
 
         WriteAcknowledge acknowledge;
         if (myData == null) {
-            acknowledge = new WriteAcknowledge(source, NOT_MINE);
+            if (policy.canSave(myAddress, keyData.getKey())) {
+                memory.put(keyData.getKey(), otherData);
+                acknowledge = new WriteAcknowledge(source, SUCCESS);
+            } else {
+                acknowledge = new WriteAcknowledge(source, NOT_MINE);
+            }
         } else if (myData.getSequenceNumber() >= otherData.getSequenceNumber()) {
             acknowledge = new WriteAcknowledge(source, BAD_SEQ);
         } else {

@@ -87,7 +87,7 @@ public class SharedMemory extends ComponentDefinition {
         connector.connect(memory.getNegative(SMWriter.Port.class),
                 writer.getPositive(SMWriter.Port.class), Channel.TWO_WAY);
 
-        final Component reader = creator.create(SMReader.class,
+        final Component reader = SMReader.create(creator, connector,
                 new SMReader.Init(init.myAddress, init.addresses, init.networkComponent,
                         init.memory, init.policy));
         connector.connect(memory.getNegative(SMReader.Port.class),

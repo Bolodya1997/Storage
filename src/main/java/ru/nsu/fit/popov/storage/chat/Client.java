@@ -31,7 +31,7 @@ public class Client extends ComponentDefinition {
                         case SUCCESS:
                             System.out.println("success");
                             break;
-                        case LOST_DATA:
+                        case NOT_ENOUGH_NODES:
                             System.out.println("not enough nodes");
                     }
                     synchronized (lock) {
@@ -51,7 +51,7 @@ public class Client extends ComponentDefinition {
                         case BAD_KEY:
                             System.out.println("bad key");
                             break;
-                        case LOST_DATA:
+                        case NOT_ENOUGH_NODES:
                             System.out.println("not enough nodes");
                     }
                     synchronized (lock) {

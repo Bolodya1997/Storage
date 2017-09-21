@@ -61,16 +61,6 @@ public class SMWriter extends ComponentDefinition {
         }
     }
 
-    private static final byte SUCCESS  = 0;
-    private static final byte BAD_SEQ  = 1;
-    private static final byte NOT_MINE = 2;
-
-    private static class WriteAcknowledge extends BaseMessage {
-        private WriteAcknowledge(Address source, Address destination, byte code) {
-            super(source, destination, code);
-        }
-    }
-
     static Component create(Creator creator, Connector connector, Init init) {
         final Component writer = creator.create(SMWriter.class, init);
         connector.connect(writer.getNegative(Network.class),
@@ -81,6 +71,12 @@ public class SMWriter extends ComponentDefinition {
         connector.connect(writer.getNegative(UniformBroadcast.Port.class),
                 ub.getPositive(UniformBroadcast.Port.class), Channel.TWO_WAY);
 
+        final Component sw = SimpleWriter.create(creator, connector,
+                new SimpleWriter.Init(init.myAddress, init.addresses, init.networkComponent,
+                        init.memory, init.policy));
+        connector.connect(writer.getNegative(SimpleWriter.Port.class),
+                sw.getPositive(SimpleWriter.Port.class), Channel.TWO_WAY);
+
         return writer;
     }
 
@@ -89,6 +85,8 @@ public class SMWriter extends ComponentDefinition {
 
 //    ------   implementation ports   ------
     private final Positive<UniformBroadcast.Port> ubPort = requires(UniformBroadcast.Port.class);
+    private final Positive<SimpleWriter.Port> swPort =
+            requires(SimpleWriter.Port.class);
     private final Positive<Network> networkPort = requires(Network.class);
 
     private final Address myAddress;
@@ -99,7 +97,6 @@ public class SMWriter extends ComponentDefinition {
 
     private KeyData pendingData;
     private final Set<Address> seqAddresses = new HashSet<>();
-    private final Map<Address, Byte> ackAddresses = new HashMap<>();
 
     private final Handler<Request> requestHandler = new Handler<Request>() {
         @Override
@@ -127,33 +124,26 @@ public class SMWriter extends ComponentDefinition {
                     seqAddresses.add(sequenceResponse.getSource());
                     if (seqAddresses.containsAll(addresses)) {  //  FIXME: do on timeout
                         seqAddresses.clear();
-                        ackRequest();
+                        swRequest();
                     }
                 }
             };
 
-    private final Handler<WriteAcknowledge> writeAcknowledgeHandler =
-            new Handler<WriteAcknowledge>() {
+    private final Handler<SimpleWriter.Response> swResponseHandler =
+            new Handler<SimpleWriter.Response>() {
                 @Override
-                public void handle(WriteAcknowledge acknowledge) {
-                    ackAddresses.put(acknowledge.getSource(), (Byte) acknowledge.getData());
-                    if (ackAddresses.keySet().containsAll(addresses)) { //  FIXME: do on timeout
-                        if (ackAddresses.values().contains(BAD_SEQ)) {
-                            retryPending();
-                            return;
-                        }
-
-                        int ackCount = (int) ackAddresses.values().stream()
-                                .filter(code -> code == SUCCESS)
-                                .count();
-
-                        Response response;
-                        if (ackCount < ReplicationPolicy.REPLICATION_DEGREE)
-                            response = new Response(Code.LOST_DATA);
-                        else
-                            response = new Response(Code.SUCCESS);
-                        trigger(response, port);
+                public void handle(SimpleWriter.Response swResponse) {
+                    if (swResponse.code == SimpleWriter.InnerCode.RETRY) {
+                        retryPending();
+                        return;
                     }
+
+                    Response response;
+                    if (swResponse.code == SimpleWriter.InnerCode.SUCCESS)
+                        response = new Response(Code.SUCCESS);
+                    else
+                        response = new Response(Code.NOT_ENOUGH_NODES);
+                    trigger(response, port);
                 }
             };
 
@@ -161,12 +151,13 @@ public class SMWriter extends ComponentDefinition {
             new Handler<UniformBroadcast.Deliver>() {
                 @Override
                 public void handle(UniformBroadcast.Deliver ubDeliver) {
-                    if (ubDeliver.data instanceof String)
-                        seqRequestHandler(ubDeliver.source, (String) ubDeliver.data);
-                    else if (ubDeliver.data instanceof KeyData)
-                        ackRequestHandler(ubDeliver.source, (KeyData) ubDeliver.data);
-                    else
-                        throw new RuntimeException("Invalid request");
+                    final String key = (String) ubDeliver.data;
+                    final Data data = memory.get(key);
+                    final int sequenceNumber = (data != null) ? data.getSequenceNumber() : 0;
+
+                    final SequenceResponse response
+                            = new SequenceResponse(myAddress, ubDeliver.source, sequenceNumber);
+                    trigger(response, networkPort);
                 }
             };
 
@@ -178,7 +169,7 @@ public class SMWriter extends ComponentDefinition {
 
         subscribe(requestHandler, port);
         subscribe(sequenceResponseHandler, networkPort);
-        subscribe(writeAcknowledgeHandler, networkPort);
+        subscribe(swResponseHandler, swPort);
         subscribe(ubDeliverHandler, ubPort);
     }
 
@@ -188,44 +179,11 @@ public class SMWriter extends ComponentDefinition {
         trigger(request, port);
     }
 
-    private void seqRequestHandler(Address source, String key) {
-        final Data data = memory.get(key);
-        final int sequenceNumber = (data != null) ? data.getSequenceNumber() : 0;
-
-        final SequenceResponse response = new SequenceResponse(myAddress, source, sequenceNumber);
-        trigger(response, networkPort);
-    }
-
-    private void ackRequest() {
+    private void swRequest() {
         final int sequenceNumber = pendingData.getData().getSequenceNumber() + 1;
         pendingData.getData().setSequenceNumber(sequenceNumber);
 
-        ackAddresses.clear();
-
-        final UniformBroadcast.Broadcast ubBroadcast = new UniformBroadcast.Broadcast(pendingData);
-        trigger(ubBroadcast, ubPort);
-
-        //  FIXME: add timeout
-    }
-
-    private void ackRequestHandler(Address source, KeyData keyData) {
-        final Data myData = memory.get(keyData.getKey());
-        final Data otherData = keyData.getData();
-
-        WriteAcknowledge acknowledge;
-        if (myData == null) {
-            if (policy.canSave(myAddress, keyData.getKey())) {
-                memory.put(keyData.getKey(), otherData);
-                acknowledge = new WriteAcknowledge(myAddress, source, SUCCESS);
-            } else {
-                acknowledge = new WriteAcknowledge(myAddress, source, NOT_MINE);
-            }
-        } else if (myData.getSequenceNumber() >= otherData.getSequenceNumber()) {
-            acknowledge = new WriteAcknowledge(myAddress, source, BAD_SEQ);    //  TODO: think about equals case
-        } else {
-            memory.put(keyData.getKey(), otherData);
-            acknowledge = new WriteAcknowledge(myAddress, source, SUCCESS);
-        }
-        trigger(acknowledge, networkPort);
+        final SimpleWriter.Request swRequest = new SimpleWriter.Request(pendingData);
+        trigger(swRequest, swPort);
     }
 }

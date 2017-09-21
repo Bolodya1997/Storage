@@ -8,7 +8,6 @@ import ru.nsu.fit.popov.storage.util.Creator;
 import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
 
-import java.io.Serializable;
 import java.util.*;
 
 public class SMReader extends ComponentDefinition {
@@ -106,6 +105,8 @@ public class SMReader extends ComponentDefinition {
             final UniformBroadcast.Broadcast ubBroadcast =
                     new UniformBroadcast.Broadcast(request.key);
             trigger(ubBroadcast, ubPort);
+
+            //  FIXME: start timer
         }
     };
 
@@ -129,7 +130,7 @@ public class SMReader extends ComponentDefinition {
                 if (myData.getSequenceNumber() < 0)
                     response = new Response(Code.BAD_KEY, BAD_DATA);
                 else if (count < ReplicationPolicy.REPLICATION_DEGREE)
-                    response = new Response(Code.LOST_DATA, BAD_DATA);
+                    response = new Response(Code.NOT_ENOUGH_NODES, BAD_DATA);
                 else
                     response = new Response(Code.SUCCESS, myData.getValue());
                 trigger(response, port);

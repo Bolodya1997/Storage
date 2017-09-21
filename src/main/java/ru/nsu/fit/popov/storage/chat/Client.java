@@ -133,6 +133,6 @@ public class Client extends ComponentDefinition {
     }
 
     private void error() {
-        System.out.println("write key value\nread key\n");
+        System.out.println("write key value\nread key\nexit\n");
     }
 }

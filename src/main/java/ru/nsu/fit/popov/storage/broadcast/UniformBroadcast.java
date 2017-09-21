@@ -63,12 +63,11 @@ public class UniformBroadcast extends ComponentDefinition {
     public static Component create(Creator creator, Connector connector, Init init) {
         final Component ub = creator.create(UniformBroadcast.class, init);
 
-        final Component beb = creator.create(BestEffortBroadcast.class,
-                new BestEffortBroadcast.Init(init.myAddress, init.addresses));
+        final Component beb = BestEffortBroadcast.create(creator, connector,
+                new BestEffortBroadcast.Init(init.myAddress, init.addresses,
+                        init.networkComponent));
         connector.connect(ub.getNegative(BestEffortBroadcast.Port.class),
                 beb.getPositive(BestEffortBroadcast.Port.class), Channel.TWO_WAY);
-        connector.connect(beb.getNegative(Network.class),
-                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
 
         final Component timer = creator.create(JavaTimer.class, null);
         connector.connect(ub.getNegative(Timer.class),
@@ -77,7 +76,10 @@ public class UniformBroadcast extends ComponentDefinition {
         return ub;
     }
 
+//    ------   interface ports   ------
     private final Negative<Port> port = provides(Port.class);
+
+//    ------   implementation ports   ------
     private final Positive<BestEffortBroadcast.Port> bebPort =
             requires(BestEffortBroadcast.Port.class);
     private final Positive<Timer> timerPort = requires(Timer.class);

@@ -2,6 +2,8 @@ package ru.nsu.fit.popov.storage.broadcast;
 
 import ru.nsu.fit.popov.storage.net.Address;
 import ru.nsu.fit.popov.storage.net.MyMessage;
+import ru.nsu.fit.popov.storage.util.Connector;
+import ru.nsu.fit.popov.storage.util.Creator;
 import ru.nsu.fit.popov.storage.util.Identifier;
 import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
@@ -14,10 +16,12 @@ public class BestEffortBroadcast extends ComponentDefinition {
     public static class Init extends se.sics.kompics.Init<BestEffortBroadcast> {
         private final Address myAddress;
         private final Collection<Address> addresses;
+        private final Component networkComponent;
 
-        public Init(Address myAddress, Collection<Address> addresses) {
+        public Init(Address myAddress, Collection<Address> addresses, Component networkComponent) {
             this.myAddress = myAddress;
             this.addresses = addresses;
+            this.networkComponent = networkComponent;
         }
     }
 
@@ -47,12 +51,23 @@ public class BestEffortBroadcast extends ComponentDefinition {
     }
 
     private static class Message extends MyMessage {
-        public Message(Address source, Address destination, Serializable data, int myId) {
+        private Message(Address source, Address destination, Serializable data, int myId) {
             super(source, destination, data, myId);
         }
     }
 
+    public static Component create(Creator creator, Connector connector, Init init) {
+        final Component beb = creator.create(BestEffortBroadcast.class, init);
+        connector.connect(beb.getNegative(Network.class),
+                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
+
+        return beb;
+    }
+
+//    ------   interface ports   ------
     private final Negative<Port> port = provides(Port.class);
+
+//    ------   implementation ports   ------
     private final Positive<Network> networkPort = requires(Network.class);
 
     private final int myId = Identifier.getId();

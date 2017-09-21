@@ -37,7 +37,7 @@ public class Starter extends ComponentDefinition {
     private final static byte WAITING   = 0;
     private final static byte READY     = 1;
 
-    private final static long DELAY = 10L;
+    private final static long DELAY = 250L;
 
     static Component create(Creator creator, Connector connector, Init init) {
         final Component starter = creator.create(Starter.class, init);
@@ -46,20 +46,22 @@ public class Starter extends ComponentDefinition {
         connector.connect(starter.getNegative(Timer.class),
                 timer.getPositive(Timer.class), Channel.TWO_WAY);
 
-        final Component beb = creator.create(BestEffortBroadcast.class,
-                new BestEffortBroadcast.Init(init.myAddress, init.addresses));
+        final Component beb = BestEffortBroadcast.create(creator, connector,
+                new BestEffortBroadcast.Init(init.myAddress, init.addresses,
+                        init.networkComponent));
         connector.connect(starter.getNegative(BestEffortBroadcast.Port.class),
                 beb.getPositive(BestEffortBroadcast.Port.class), Channel.TWO_WAY);
-        connector.connect(beb.getNegative(Network.class),
-                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
 
         return starter;
     }
 
+//    ------   interface ports   ------
+    private final Negative<StartPort> startPort = provides(StartPort.class);
+
+//    ------   implementation ports   ------
     private final Positive<Timer> timerPort = requires(Timer.class);
     private final Positive<BestEffortBroadcast.Port> bebPort
             = requires(BestEffortBroadcast.Port.class);
-    private final Negative<StartPort> startPort = provides(StartPort.class);
 
     private final Map<Address, Boolean> addresses = new HashMap<>();
     private boolean woken = false;

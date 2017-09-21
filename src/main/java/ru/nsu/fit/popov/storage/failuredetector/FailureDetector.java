@@ -61,18 +61,20 @@ public class FailureDetector extends ComponentDefinition {
         connector.connect(fd.getNegative(Timer.class),
                 timer.getPositive(Timer.class), Channel.TWO_WAY);
 
-        final Component beb = creator.create(BestEffortBroadcast.class,
-                new BestEffortBroadcast.Init(init.myAddress, bebAddresses));
+        final Component beb = BestEffortBroadcast.create(creator, connector,
+                new BestEffortBroadcast.Init(init.myAddress, init.addresses,
+                        init.networkComponent));
         connector.connect(fd.getNegative(BestEffortBroadcast.Port.class),
                 beb.getPositive(BestEffortBroadcast.Port.class), Channel.TWO_WAY);
-        connector.connect(beb.getNegative(Network.class),
-                init.networkComponent.getPositive(Network.class), Channel.TWO_WAY);
 
         return fd;
     }
 
+//    ------   interface ports   ------
     private final Positive<StartPort> startPort = requires(StartPort.class);
     private final Negative<Port> port = provides(Port.class);
+
+//    ------   implementation ports   ------
     private final Positive<BestEffortBroadcast.Port> bebPort =
             requires(BestEffortBroadcast.Port.class);
     private final Positive<Timer> timerPort = requires(Timer.class);

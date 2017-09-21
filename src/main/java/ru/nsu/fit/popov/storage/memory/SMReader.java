@@ -9,10 +9,7 @@ import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
 
 import java.io.Serializable;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class SMReader extends ComponentDefinition {
 
@@ -78,6 +75,11 @@ public class SMReader extends ComponentDefinition {
         return reader;
     }
 
+    public static int BAD_DATA  = -1;
+
+    private static int DONT_HAVE =  -1;
+    private static int NOT_MINE =   -2;
+
 //    ------   interface ports   ------
     private final Negative<Port> port = provides(Port.class);
 
@@ -92,12 +94,12 @@ public class SMReader extends ComponentDefinition {
     private final ReplicationPolicy policy;
 
     private KeyData pendingData;
-    private final Set<Address> valueAddresses = new HashSet<>();
+    private final Map<Address, Integer> valueAddresses = new HashMap<>();
 
     private final Handler<Request> requestHandler = new Handler<Request>() {
         @Override
         public void handle(Request request) {
-            final Data data = new Data(-1, -1);
+            final Data data = new Data(BAD_DATA, DONT_HAVE);
             pendingData = new KeyData(request.key, data);
             valueAddresses.clear();
 
@@ -117,13 +119,17 @@ public class SMReader extends ComponentDefinition {
                 myData.setSequenceNumber(otherData.getSequenceNumber());
             }
 
-            valueAddresses.add(dataResponse.getSource());
-            if (valueAddresses.containsAll(addresses)) {    //  FIXME: do on timeout
-                valueAddresses.clear();
+            valueAddresses.put(dataResponse.getSource(), otherData.getSequenceNumber());
+            if (valueAddresses.keySet().containsAll(addresses)) {    //  FIXME: do on timeout
+                final int count = (int) valueAddresses.values().stream()
+                        .filter(sequenceNumber -> sequenceNumber > 0)
+                        .count();
 
                 Response response;
                 if (myData.getSequenceNumber() < 0)
-                    response = new Response(Code.BAD_KEY, -1);
+                    response = new Response(Code.BAD_KEY, BAD_DATA);
+                else if (count < ReplicationPolicy.REPLICATION_DEGREE)
+                    response = new Response(Code.LOST_DATA, BAD_DATA);
                 else
                     response = new Response(Code.SUCCESS, myData.getValue());
                 trigger(response, port);
@@ -137,8 +143,12 @@ public class SMReader extends ComponentDefinition {
                 public void handle(UniformBroadcast.Deliver ubDeliver) {
                     final String key = (String) ubDeliver.data;
                     Data data = memory.get(key);
-                    if (data == null)
-                        data = new Data(-1, -1);
+                    if (data == null) {
+                        if (policy.canSave(myAddress, key))
+                            data = new Data(BAD_DATA, DONT_HAVE);
+                        else
+                            data = new Data(BAD_DATA, NOT_MINE);
+                    }
 
                     final DataResponse dataResponse
                             = new DataResponse(myAddress, ubDeliver.source, data);

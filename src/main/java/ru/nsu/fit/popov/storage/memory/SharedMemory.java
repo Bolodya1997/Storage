@@ -93,6 +93,12 @@ public class SharedMemory extends ComponentDefinition {
         connector.connect(memory.getNegative(SMReader.Port.class),
                 reader.getPositive(SMReader.Port.class), Channel.TWO_WAY);
 
+        final Component updater = SMUpdater.create(creator, connector,
+                new SMUpdater.Init(init.myAddress, init.addresses, init.networkComponent,
+                        init.memory, init.policy));
+        connector.connect(memory.getNegative(SMUpdater.Port.class),
+                updater.getPositive(SMUpdater.Port.class), Channel.TWO_WAY);
+
         final Component fd = FailureDetector.create(creator, connector,
                 new FailureDetector.Init(init.myAddress, init.addresses, init.networkComponent));
         connector.connect(fd.getNegative(StartPort.class),
@@ -109,6 +115,7 @@ public class SharedMemory extends ComponentDefinition {
 //    ------   implementation ports   ------
     private final Positive<SMWriter.Port> writerPort = requires(SMWriter.Port.class);
     private final Positive<SMReader.Port> readerPort = requires(SMReader.Port.class);
+    private final Positive<SMUpdater.Port> updaterPort = requires(SMUpdater.Port.class);
     private final Positive<FailureDetector.Port> fdPort = requires(FailureDetector.Port.class);
 
     private final Collection<Address> addresses;
@@ -158,9 +165,8 @@ public class SharedMemory extends ComponentDefinition {
 
             addresses.remove(fail.address);
 
-            //  FIXME: lost data replication
-
-            policy.fail(fail.address);
+            final SMUpdater.Update update = new SMUpdater.Update(fail.address);
+            trigger(update, updaterPort);
         }
     };
 

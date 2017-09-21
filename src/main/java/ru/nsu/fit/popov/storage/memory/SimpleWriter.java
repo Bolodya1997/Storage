@@ -3,8 +3,10 @@ package ru.nsu.fit.popov.storage.memory;
 import ru.nsu.fit.popov.storage.broadcast.UniformBroadcast;
 import ru.nsu.fit.popov.storage.net.Address;
 import ru.nsu.fit.popov.storage.net.BaseMessage;
+import ru.nsu.fit.popov.storage.net.MyMessage;
 import ru.nsu.fit.popov.storage.util.Connector;
 import ru.nsu.fit.popov.storage.util.Creator;
+import ru.nsu.fit.popov.storage.util.Identifier;
 import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
 
@@ -59,13 +61,13 @@ public class SimpleWriter extends ComponentDefinition {
         }
     }
 
-    private static class Acknowledge extends BaseMessage {
+    private static class Acknowledge extends MyMessage {
         private static final byte SUCCESS  = 0;
         private static final byte BAD_SEQ  = 1;
         private static final byte NOT_MINE = 2;
 
-        private Acknowledge(Address source, Address destination, byte code) {
-            super(source, destination, code);
+        private Acknowledge(Address source, Address destination, byte code, int myId) {
+            super(source, destination, code, myId);
         }
     }
 
@@ -88,6 +90,8 @@ public class SimpleWriter extends ComponentDefinition {
 //    ------   implementation ports   ------
     private final Positive<UniformBroadcast.Port> ubPort = requires(UniformBroadcast.Port.class);
     private final Positive<Network> networkPort = requires(Network.class);
+
+    private final int myId = Identifier.getId();
 
     private final Address myAddress;
     private final Collection<Address> addresses;
@@ -113,6 +117,9 @@ public class SimpleWriter extends ComponentDefinition {
     private final Handler<Acknowledge> acknowledgeHandler = new Handler<Acknowledge>() {
         @Override
         public void handle(Acknowledge acknowledge) {
+            if (!acknowledge.canHandle(myId))
+                return;
+
             ackAddresses.put(acknowledge.getSource(), (Byte) acknowledge.getData());
             if (ackAddresses.keySet().containsAll(addresses)) { //  FIXME: do on timeout
                 int ackCount = (int) ackAddresses.values().stream()
@@ -126,6 +133,8 @@ public class SimpleWriter extends ComponentDefinition {
                     response = new Response(InnerCode.NOT_ENOUGH_NODES);
                 else
                     response = new Response(InnerCode.SUCCESS);
+
+                ackAddresses.clear();
                 trigger(response, port);
             }
         }
@@ -145,18 +154,18 @@ public class SimpleWriter extends ComponentDefinition {
                         if (policy.canSave(myAddress, keyData.getKey())) {
                             memory.put(keyData.getKey(), otherData);
                             acknowledge = new Acknowledge(myAddress, ubDeliver.source,
-                                    Acknowledge.SUCCESS);
+                                    Acknowledge.SUCCESS, myId);
                         } else {
                             acknowledge = new Acknowledge(myAddress, ubDeliver.source,
-                                    Acknowledge.NOT_MINE);
+                                    Acknowledge.NOT_MINE, myId);
                         }
                     } else if (myData.getSequenceNumber() >= otherData.getSequenceNumber()) {
                         acknowledge = new Acknowledge(myAddress, ubDeliver.source,
-                                Acknowledge.BAD_SEQ);    //  TODO: think about equals case
+                                Acknowledge.BAD_SEQ, myId);   //  TODO: think about equals case
                     } else {
                         memory.put(keyData.getKey(), otherData);
                         acknowledge = new Acknowledge(myAddress, ubDeliver.source,
-                                Acknowledge.SUCCESS);
+                                Acknowledge.SUCCESS, myId);
                     }
                     trigger(acknowledge, networkPort);
                 }

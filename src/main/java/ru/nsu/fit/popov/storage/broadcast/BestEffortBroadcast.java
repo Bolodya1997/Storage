@@ -1,7 +1,8 @@
 package ru.nsu.fit.popov.storage.broadcast;
 
 import ru.nsu.fit.popov.storage.net.Address;
-import ru.nsu.fit.popov.storage.net.BaseMessage;
+import ru.nsu.fit.popov.storage.net.MyMessage;
+import ru.nsu.fit.popov.storage.util.Identifier;
 import se.sics.kompics.*;
 import se.sics.kompics.network.Network;
 
@@ -45,13 +46,9 @@ public class BestEffortBroadcast extends ComponentDefinition {
         }
     }
 
-    private static class Message extends BaseMessage {
-        private final int handlerId;
-
-        private Message(Address source, Address destination, Serializable data,
-                        int handlerId) {
-            super(source, destination, data);
-            this.handlerId = handlerId;
+    private static class Message extends MyMessage {
+        public Message(Address source, Address destination, Serializable data, int myId) {
+            super(source, destination, data, myId);
         }
     }
 
@@ -76,10 +73,11 @@ public class BestEffortBroadcast extends ComponentDefinition {
     private final Handler<Message> messageHandler = new Handler<Message>() {
         @Override
         public void handle(Message message) {
-            if (Objects.equals(message.handlerId, myId)) {
-                final Deliver deliver = new Deliver(message.getSource(), message.getData());
-                trigger(deliver, port);
-            }
+            if (!message.canHandle(myId))
+                return;
+
+            final Deliver deliver = new Deliver(message.getSource(), message.getData());
+            trigger(deliver, port);
         }
     };
 

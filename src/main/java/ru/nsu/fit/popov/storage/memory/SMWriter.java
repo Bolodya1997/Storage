@@ -85,8 +85,7 @@ public class SMWriter extends ComponentDefinition {
 
 //    ------   implementation ports   ------
     private final Positive<UniformBroadcast.Port> ubPort = requires(UniformBroadcast.Port.class);
-    private final Positive<SimpleWriter.Port> swPort =
-            requires(SimpleWriter.Port.class);
+    private final Positive<SimpleWriter.Port> swPort = requires(SimpleWriter.Port.class);
     private final Positive<Network> networkPort = requires(Network.class);
 
     private final Address myAddress;
@@ -137,6 +136,8 @@ public class SMWriter extends ComponentDefinition {
                         retryPending();
                         return;
                     }
+
+                    pendingData = null;
 
                     Response response;
                     if (swResponse.code == SimpleWriter.InnerCode.SUCCESS)

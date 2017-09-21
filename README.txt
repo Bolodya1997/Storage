@@ -7,7 +7,7 @@ Configuration:
 src/main/resources/ru/nsu/fit/popov/storage/config.properties
 2)  replication degree is in:
 src/main/java/ru/nsu/fit/popov/storage/memory/ReplicationPolicy.java (line 9)
-3) heartbeat timeout is in:
+3)  heartbeat timeout is in:
 src/main/java/ru/nsu/fit/popov/storage/failuredetector/FailureDetector.java (line 51)
 
 To build .jar file:

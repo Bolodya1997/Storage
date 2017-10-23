@@ -14,9 +14,19 @@ To build .jar file:
   mvn clean compile assembly:single
 
 To start:
-  java -jar name.jar node_number
+  java -jar name.jar node_number [server_port]
 
-Commands:
-  write key value
-  read key
-  exit
+TCP/IP interface:
+  read request:
+    (byte)0 (int)key_length (UTF8)key
+  read response:
+    (byte)code (int)value
+  write rquest:
+    (byte)1 (int)key_length (UTF8)key (int)value
+  write response:
+    (byte)code
+
+  code:
+    SUCCESS = 0
+    BAD KEY = 1
+    NOT ENOUGH NODES = 2

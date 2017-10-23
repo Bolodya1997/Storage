@@ -21,12 +21,11 @@ class NetServer {
 
     NetServer(SocketAddress address, Memory memory) throws IOException {
         serverSocketChannel.bind(address);
+        serverSocketChannel.configureBlocking(false);
 
         this.memory = memory;
 
-        final SelectionKey selectionKey = serverSocketChannel.keyFor(selector);
-        selectionKey.interestOps(SelectionKey.OP_ACCEPT);
-        selector.keys().add(selectionKey);
+        serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
     }
 
     void start() throws IOException {
@@ -50,8 +49,9 @@ class NetServer {
 
     private void accept() throws IOException {
         final SocketChannel socketChannel = serverSocketChannel.accept();
+        socketChannel.configureBlocking(false);
 
-        final SelectionKey selectionKey = socketChannel.keyFor(selector);
+        final SelectionKey selectionKey = socketChannel.register(selector, SelectionKey.OP_READ);
         final Session session = new HeaderSession(selectionKey, memory);
         sessions.put(selectionKey, session);
     }

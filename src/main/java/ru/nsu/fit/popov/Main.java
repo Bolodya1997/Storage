@@ -14,7 +14,7 @@ public class Main {
         SocketAddress serverAddress = null;
         if (args.length > 1) {
             int port = Integer.decode(args[1]);
-            serverAddress = new InetSocketAddress(port);
+            serverAddress = new InetSocketAddress("localhost", port);
         }
 
         final Application.Init init = new Application.Init(number, serverAddress);

@@ -33,8 +33,9 @@ class ReadSession extends Session {
     }
 
     private Session errorProcess(byte code) {
-        buffer = ByteBuffer.allocate(Byte.BYTES);
+        buffer = ByteBuffer.allocate(Byte.BYTES + Integer.BYTES);
         buffer.put(code);
+        buffer.putInt(-1);
         buffer.flip();
 
         selectionKey.interestOps(SelectionKey.OP_WRITE);
